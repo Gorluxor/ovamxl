@@ -5,9 +5,9 @@ import torch.nn.functional as F
 
 from ..base.daam_module import DAAMModule
 from ..utils.attention_ops import apply_activation, apply_aggregation
-
+from ..utils.text_encoding import encode_text_sdxl
 if TYPE_CHECKING:
-    from diffusers import StableDiffusionPipeline
+    from diffusers import StableDiffusionPipeline, StableDiffusionXLPipeline, StableDiffusionImg2ImgPipeline, StableDiffusionXLImg2ImgPipeline
 
     from .daam_block import CrossAttentionDAAMBlock
 
@@ -131,3 +131,82 @@ class StableDiffusionDAAM(DAAMModule):
             )
 
         return attentions
+
+class StableDiffusionXLDAAM(StableDiffusionDAAM):
+    """Generic DAAMModule implementation for Stable Diffusion models. It is used to
+    save the hidden states of the cross attention blocks and to build a callable
+    DAAM function.
+
+    Arguments
+    ---------
+    blocks : List[DAAMBlock]
+        The list of DAAM blocks to use.
+    tokenizer : Callable
+        The tokenizer to use to encode the text.
+    text_encoder : Callable
+        The text encoder to use to encode the text.
+    heatmaps_activation : str or Callable
+        The activation function to apply to the heatmaps. If a string, it must be one of
+        "relu", "sigmoid", "tanh" or None (identity function).
+    heatmaps_aggregation : str or Callable
+        The aggregation function to apply to the heatmaps. If a string, it must be one of
+        "mean", "sum", "max" or None (identity function).
+    expand_size : Tuple[int, int]
+        The size to expand the heatmaps to. If None, the heatmaps are not expanded.
+    expand_interpolation_mode : str
+        The interpolation mode to use when expanding the heatmaps. Default: "bilinear"
+
+    """
+
+    def __init__(
+        self,
+        blocks: List["CrossAttentionDAAMBlock"],
+        pipeline: Union["StableDiffusionPipeline", "StableDiffusionXLPipeline", "StableDiffusionImg2ImgPipeline", "StableDiffusionXLImg2ImgPipeline"] ,
+        heatmaps_activation: Optional[
+            Union[Literal["sigmoid", "tanh", "relu"], "Callable"]
+        ] = None,
+        heatmaps_aggregation: Union[Literal["mean", "sum"], "Callable"] = "mean",
+        block_latent_size: Optional[Tuple[int, int]] = None,
+        block_interpolation_mode: str = "bilinear",
+        expand_size: Optional[Tuple[int, int]] = None,
+        expand_interpolation_mode: str = "bilinear",
+    ):
+        super().__init__(
+            blocks,
+            pipeline,
+            heatmaps_activation,
+            heatmaps_aggregation,
+            block_latent_size,
+            block_interpolation_mode,
+            expand_size,
+            expand_interpolation_mode,
+        )
+        assert hasattr(pipeline, "tokenizer_2") and hasattr(pipeline, "text_encoder_2"), f"Pipeline must have tokenizer_2 and text_encoder_2"
+        assert pipeline.tokenizer_2 is not None and pipeline.text_encoder_2 is not None, f"Pipeline must have tokenizer_2 and text_encoder_2 not None"
+        self.tokenizer_2 = pipeline.tokenizer_2
+        self.text_encoder_2 = pipeline.text_encoder_2
+
+    @torch.no_grad()
+    def encode_text(self, text: str, context_sentence: Optional[str] = None, remove_special_tokens: TYPE_CHECKING = True, padding=False) -> torch.Tensor:
+
+        _, text_embd = encode_text_sdxl(
+            tokenizer=self.tokenizer,
+            text_encoder=self.text_encoder,
+            text=text,
+            context_sentence=context_sentence,
+            remove_special_tokens=remove_special_tokens,
+            padding=padding,
+        )
+
+        pooled, text_embd_2 = encode_text_sdxl(
+            tokenizer=self.tokenizer_2,
+            text_encoder=self.text_encoder_2,
+            text=text,
+            context_sentence=context_sentence,
+            remove_special_tokens=remove_special_tokens,
+            padding=padding,
+        )
+
+        text_embd = torch.concat([text_embd, text_embd_2], dim=-1)
+
+        return text_embd

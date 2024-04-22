@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Optional, List
+from typing import TYPE_CHECKING, Optional, List, Union
 
 import torch
 
@@ -8,7 +8,7 @@ from .self_att_block_hooker import SelfAttentionHooker
 
 
 if TYPE_CHECKING:
-    from diffusers import StableDiffusionPipeline
+    from diffusers import StableDiffusionPipeline, StableDiffusionXLPipeline, StableDiffusionImg2ImgPipeline, StableDiffusionXLImg2ImgPipeline
 
 
 class StableDiffusionHookerSA(StableDiffusionHooker):
@@ -44,7 +44,7 @@ class StableDiffusionHookerSA(StableDiffusionHooker):
 
     def __init__(
         self,
-        pipeline: "StableDiffusionPipeline",
+        pipeline: Union["StableDiffusionPipeline", "StableDiffusionImg2ImgPipeline", "StableDiffusionXLPipeline", "StableDiffusionXLImg2ImgPipeline"],
         extract_self_attentions: bool = False,
         sa_in_features: Optional[List[int]] = None,
         **kwargs,

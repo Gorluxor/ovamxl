@@ -1,13 +1,16 @@
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
 from ..base.store_hooker import StoreHiddenStatesHooker
 from ..base.pipeline_hooker import PipelineHooker
 from .block_hooker import CrossAttentionHooker
-from .daam_module import StableDiffusionDAAM
+from .daam_module import StableDiffusionDAAM, DAAMModule
 from .locator import UNetCrossAttentionLocator
+from ..base.hooker import ObjectHooker, ModuleType
 
 if TYPE_CHECKING:
-    from diffusers import StableDiffusionPipeline
+    from diffusers import (
+        StableDiffusionPipeline, StableDiffusionImg2ImgPipeline, StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline
+    )
     from ..utils.attention_ops import ActivationTypeVar, AggregationTypeVar
 
 
@@ -17,7 +20,7 @@ class StableDiffusionHooker(PipelineHooker):
 
     Arguments
     ---------
-    pipeline: StableDiffusionPipeline
+    pipeline: Union[StableDiffusionPipeline, StableDiffusionImg2ImgPipeline, StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline]
         Pipeline to be hooked
     restrict_block_index: Optional[Iterable[int]]
         Restrict the hooking to the blocks with the given indices. If None, all
@@ -42,26 +45,33 @@ class StableDiffusionHooker(PipelineHooker):
 
     def __init__(
         self,
-        pipeline: "StableDiffusionPipeline",
+        pipeline: Union["StableDiffusionPipeline", "StableDiffusionImg2ImgPipeline", "StableDiffusionXLPipeline", "StableDiffusionXLImg2ImgPipeline"],
         locate_middle_block: bool = False,
         block_hooker_kwargs: dict = {},
         locator_kwargs: dict = {},
+        daam_module_class: type = StableDiffusionDAAM, # added to support SDXL
+        block_hooker_class: type = CrossAttentionHooker, # future proofing
+        locator_hooker_class: type = UNetCrossAttentionLocator, # future proofing
+        store_hidden_states_hooker_class: type = StoreHiddenStatesHooker, # future proofing
     ):
+        self.store_hidden_states_hooker_class = store_hidden_states_hooker_class
+        assert issubclass(store_hidden_states_hooker_class, ObjectHooker), f"{store_hidden_states_hooker_class} is not a subclass of ObjectHooker"
+        assert issubclass(daam_module_class, DAAMModule), f"{daam_module_class} is not a subclass of DAAMModule"
         super().__init__(
             pipeline,
-            locator=UNetCrossAttentionLocator(
+            locator=locator_hooker_class(
                 locate_middle_block=locate_middle_block,
                 **locator_kwargs,
             ),
-            block_hooker_class=CrossAttentionHooker,
-            daam_module_class=StableDiffusionDAAM,
+            block_hooker_class=block_hooker_class,
+            daam_module_class=daam_module_class,
             block_hooker_kwargs=block_hooker_kwargs,
         )
 
     def _register_extra_hooks(self):
         """Hook the encode prompt and forward functions along the forward pass"""
         self.register_hook(
-            StoreHiddenStatesHooker(
+            self.store_hidden_states_hooker_class(
                 module=self.pipeline.image_processor,
                 parent_trace=self,
                 function_patched="postprocess",
