@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 from ..base.daam_module import DAAMModule
 from ..utils.attention_ops import apply_activation, apply_aggregation
-from ..utils.text_encoding import encode_text_sdxl
+from ..utils.text_encoding import encode_text_sdxl, full_encode_sdxl
 if TYPE_CHECKING:
     from diffusers import StableDiffusionPipeline, StableDiffusionXLPipeline, StableDiffusionImg2ImgPipeline, StableDiffusionXLImg2ImgPipeline
 
@@ -189,24 +189,4 @@ class StableDiffusionXLDAAM(StableDiffusionDAAM):
     @torch.no_grad()
     def encode_text(self, text: str, context_sentence: Optional[str] = None, remove_special_tokens: TYPE_CHECKING = True, padding=False) -> torch.Tensor:
 
-        _, text_embd = encode_text_sdxl(
-            tokenizer=self.tokenizer,
-            text_encoder=self.text_encoder,
-            text=text,
-            context_sentence=context_sentence,
-            remove_special_tokens=remove_special_tokens,
-            padding=padding,
-        )
-
-        pooled, text_embd_2 = encode_text_sdxl(
-            tokenizer=self.tokenizer_2,
-            text_encoder=self.text_encoder_2,
-            text=text,
-            context_sentence=context_sentence,
-            remove_special_tokens=remove_special_tokens,
-            padding=padding,
-        )
-
-        text_embd = torch.concat([text_embd, text_embd_2], dim=-1)
-
-        return text_embd
+        return full_encode_sdxl(self, text, context_sentence, remove_special_tokens, padding)

@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Optional, Tuple, Union
 from ..base.store_hooker import StoreHiddenStatesHooker
 from ..base.pipeline_hooker import PipelineHooker
 from .block_hooker import CrossAttentionHooker
-from .daam_module import StableDiffusionDAAM, DAAMModule
+from .daam_module import StableDiffusionDAAM, DAAMModule, StableDiffusionXLDAAM
 from .locator import UNetCrossAttentionLocator
 from ..base.hooker import ObjectHooker, ModuleType
 
@@ -97,7 +97,7 @@ class StableDiffusionHooker(PipelineHooker):
         expand_interpolation_mode: str = "bilinear",
         block_kwargs: dict = {},
         module_kwargs: dict = {},
-    ) -> "StableDiffusionDAAM":
+    ) -> Union["StableDiffusionDAAM", "StableDiffusionXLDAAM"]:
         """
         Buld a OVAM module with the current hidden states.
         This module can be evaluated to obtain the attention maps

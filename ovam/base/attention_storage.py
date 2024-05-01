@@ -6,15 +6,34 @@ class is a generic class that can be used to implement more
 complex storage classes.
 
 """
-from typing import TYPE_CHECKING, Iterable, Optional, List
+from typing import TYPE_CHECKING, Any, Iterable, Optional, List, Union
 
-if TYPE_CHECKING:
-    import torch
+# if TYPE_CHECKING:
+import torch
+from torch import nn
+from torch.nn.modules.container import ParameterList
+from torch.nn import Parameter
 
 __all__ = ["AttentionStorage", "OnlineAttentionStorage"]
 
+class ParameterListConfigurable(ParameterList):
+    def __init__(self, values: Optional[Iterable[Any]] = None, disable_grad:bool = False ) -> None:
+        self.disable_grad = disable_grad
+        super().__init__(values)
 
-class AttentionStorage:
+    def __setitem__(self, idx: int, param: Any) -> None:
+        # Note that all other function that add an entry to the list part of
+        # the ParameterList end up here. So this is the only place where we need
+        # to wrap things into Parameter if needed.
+        # Objects added via setattr() are not in the list part and thus won't
+        # call into this function.
+        idx = self._get_abs_string_index(idx)
+        if isinstance(param, torch.Tensor) and not isinstance(param, Parameter):
+            param = Parameter(param, requires_grad=not self.disable_grad)
+        return setattr(self, str(idx), param)
+    
+
+class AttentionStorage(nn.Module):
     """Generic class for storing hidden states of upsample/downsample block.
 
     Attributes
@@ -24,6 +43,7 @@ class AttentionStorage:
     """
 
     def __init__(self, name: Optional[str] = None) -> None:
+        super().__init__()
         self.name = name
 
     def store(self, hidden_states: "torch.Tensor") -> None:
@@ -66,7 +86,8 @@ class OnlineAttentionStorage(AttentionStorage):
 
     def __init__(self, name: Optional[str] = None):
         super().__init__(name)
-        self.hidden_states: List["torch.Tensor"] = []
+        # self.hidden_states: List["torch.Tensor"] = []
+        self.hidden_states = ParameterListConfigurable(disable_grad=True)
 
     def store(self, hidden_states: "torch.Tensor") -> None:
         """Stores the hidden states.
