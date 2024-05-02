@@ -6,6 +6,7 @@ class is a generic class that can be used to implement more
 complex storage classes.
 
 """
+
 from typing import TYPE_CHECKING, Any, Iterable, Optional, List, Union
 
 # if TYPE_CHECKING:
@@ -14,11 +15,18 @@ from torch import nn
 from torch.nn.modules.container import ParameterList
 from torch.nn import Parameter
 
-__all__ = ["AttentionStorage", "OnlineAttentionStorage"]
+__all__ = ["AttentionStorage", "OnlineAttentionStorage", "ParameterListConfigurable"]
+
 
 class ParameterListConfigurable(ParameterList):
-    def __init__(self, values: Optional[Iterable[Any]] = None, disable_grad:bool = False ) -> None:
+    def __init__(
+        self,
+        values: Optional[Iterable[Any]] = None,
+        disable_grad: bool = False,
+        off_load_to_cpu: bool = False,
+    ) -> None:
         self.disable_grad = disable_grad
+        self.off_load_to_cpu = off_load_to_cpu
         super().__init__(values)
 
     def __setitem__(self, idx: int, param: Any) -> None:
@@ -29,9 +37,17 @@ class ParameterListConfigurable(ParameterList):
         # call into this function.
         idx = self._get_abs_string_index(idx)
         if isinstance(param, torch.Tensor) and not isinstance(param, Parameter):
-            param = Parameter(param, requires_grad=not self.disable_grad)
+            if (
+                self.off_load_to_cpu
+            ):  # NOTE: if you move .to after Parameter, doesn't work
+                param = Parameter(
+                    param.to("cpu", non_blocking=True),
+                    requires_grad=not self.disable_grad,
+                )
+            else:
+                param = Parameter(param, requires_grad=not self.disable_grad)
         return setattr(self, str(idx), param)
-    
+
 
 class AttentionStorage(nn.Module):
     """Generic class for storing hidden states of upsample/downsample block.
@@ -84,10 +100,14 @@ class OnlineAttentionStorage(AttentionStorage):
         The name of the block in the UNet.
     """
 
-    def __init__(self, name: Optional[str] = None):
+    def __init__(self, name: Optional[str] = None, use_default: bool = False):
         super().__init__(name)
-        # self.hidden_states: List["torch.Tensor"] = []
-        self.hidden_states = ParameterListConfigurable(disable_grad=True)
+        if use_default:
+            self.hidden_states = ParameterList()
+        else:
+            self.hidden_states = ParameterListConfigurable(
+                disable_grad=True, off_load_to_cpu=True
+            )
 
     def store(self, hidden_states: "torch.Tensor") -> None:
         """Stores the hidden states.

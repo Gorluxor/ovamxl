@@ -4,7 +4,7 @@ from .hooker import AggregateHooker
 
 if TYPE_CHECKING:
     from diffusers import StableDiffusionPipeline
-
+    import torch
     from .daam_module import DAAMModule
     from .hooker import ObjectHooker
     from .locator import ModuleLocator
@@ -83,6 +83,8 @@ class PipelineHooker(AggregateHooker):
         """
         Builds a callable DAAM function
         """
+        # If errors appear with .to() because of AttentionStore, below might solve:
+        # torch.cuda.synchronize()
 
         blocks = [
             hook.daam_block(**block_kwargs) for hook in self.cross_attention_hookers
