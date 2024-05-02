@@ -1,4 +1,55 @@
 # Open-Vocabulary Attention Maps (OVAM)
+Note: This implementation uses CPU offloading by default. Currently did not expose this to frontend.
+Edited to work with SDXL, uses existing StableDiffusionHooker below or [ipynb example](examples/ovam_sdxl_example.ipynb)
+
+```python
+from ovam.stable_diffusion.daam_module import (
+    StableDiffusionDAAM, StableDiffusionXLDAAM
+)
+import torch
+from ovam import StableDiffusionHooker
+from ovam.utils import set_seed
+from diffusers import StableDiffusionXLPipeline, StableDiffusionPipeline
+import matplotlib.pyplot as plt
+import gc
+
+device = torch.device("cuda:0") if torch.cuda.is_available() else torch.device("cpu")
+use_sdxl = True
+if use_sdxl:
+    pipe = StableDiffusionXLPipeline.from_pretrained( 
+        "stabilityai/stable-diffusion-xl-base-1.0",
+        use_safetensors=True,
+    ).to(device)
+else:
+    pipe = StableDiffusionPipeline.from_pretrained( 
+        "runwayml/stable-diffusion-v1-5",
+        use_safetensors=True,
+    ).to(device)
+img_size = 1024 if use_sdxl else 512
+expand_size = (img_size, img_size)
+hooker_kwargs = {"daam_module_class": StableDiffusionXLDAAM} if use_sdxl else {}
+
+prompt = "A photo of a dog in the park"
+guidance_scale=7.5
+with StableDiffusionHooker(
+            pipe, **hooker_kwargs
+        ) as ovam_hooker:
+    set_seed(123456)
+    out = pipe(prompt=prompt, guidance_scale=guidance_scale)
+    image = out.images[0]
+ovam_evaluator = ovam_hooker.get_ovam_callable(
+    expand_size=expand_size
+)
+ovam_evaluator.to(device)
+attribute_prompt = "A photo of a dog"
+with torch.no_grad():
+    attention_maps = ovam_evaluator(attribute_prompt)
+    attention_maps = attention_maps[0].cpu().numpy() 
+
+... 
+
+```
+Memory Note: Executing the above code requires peak memory of ~46 GB VRAM, OVAM part around 16GB. 
 
 **Open-Vocabulary Attention Maps with Token Optimization for Semantic Segmentation in Diffusion Models**
 
