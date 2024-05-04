@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING, Callable, List, Literal, Optional, Tuple, Unio
 
 import torch
 import torch.nn.functional as F
-
+import einops
 from ..base.daam_module import DAAMModule
 from ..utils.attention_ops import apply_activation, apply_aggregation
 from ..utils.text_encoding import encode_text_sdxl, full_encode_sdxl
@@ -100,18 +100,20 @@ class StableDiffusionDAAM(DAAMModule):
             block_latent_size = self.block_latent_size
 
         # Interpolate all attentions to the same size
+        # Note(Alex): Added einops for interpolation across unaggragated attn
         attentions = []
         for att in attention:
             if att.shape[-2:] == block_latent_size:
                 # If the attention has the same size as the latent size, do nothing
                 attentions.append(att)
                 continue
+            att, ps = einops.pack(att, "* c h w")
             att = F.interpolate(
                 att,
                 size=block_latent_size,
                 mode=self.block_interpolation_mode,
             )
-            attentions.append(att)
+            attentions.append(torch.stack(einops.unpack(att, ps, "* c h w")))
         # Remove reference to attention without interpolation
         del attention
 
@@ -124,11 +126,13 @@ class StableDiffusionDAAM(DAAMModule):
         attentions = apply_activation(attentions, self.heatmaps_activation)
 
         if self.expand_size is not None:
+            attentions, ps = einops.pack(attentions, "* c h w")
             attentions = F.interpolate(
                 attentions,
                 size=self.expand_size,
                 mode=self.expand_interpolation_mode,
             )
+            attentions = torch.stack(einops.unpack(attentions, ps, "* c h w"))
 
         return attentions
 
