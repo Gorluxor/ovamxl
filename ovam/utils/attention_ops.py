@@ -64,6 +64,7 @@ def apply_activation(
 def apply_aggregation(
     tensor: "torch.Tensor",
     aggregation: AggregationTypeVar,
+    dim: int = 0
 ):
     """Apply a given activation function to a tensor
 
@@ -74,6 +75,9 @@ def apply_aggregation(
     activation : str or Callable
         The activation function to apply. If a string, it must be one of
         "relu", "sigmoid", "tanh" or None (identity function).
+    dim : int
+        The dimension to apply the aggregation function to, introduced to
+        support the `dim` argument for specific aggragation
 
     """
     if aggregation is None or aggregation=='none':
@@ -81,11 +85,11 @@ def apply_aggregation(
     if callable(aggregation):
         return aggregation(tensor)
     if aggregation == "mean":
-        return torch.mean(tensor, dim=0)
+        return torch.mean(tensor, dim=dim)
     elif aggregation == "sum":
-        return torch.sum(tensor, dim=0)
+        return torch.sum(tensor, dim=dim)
     elif aggregation == "max":
-        return torch.max(tensor, dim=0)
+        return torch.max(tensor, dim=dim)
     else:
         raise ValueError(f"Unknown activation function: {aggregation}")
 

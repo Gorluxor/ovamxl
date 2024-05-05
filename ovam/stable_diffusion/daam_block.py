@@ -131,10 +131,10 @@ class CrossAttentionDAAMBlock(DAAMBlock):
             attention = apply_activation(attention, self.heads_epochs_activation)
             attention = apply_aggregation(attention, self.heads_epochs_aggregation)
 
-            # Collapse heads dimension
+            # Collapse heads dimension (initially 0, now -4, to work even with non-agg)
             # Shape: (n_tokens, latent_size / factor, latent_size / factor)
             attention = apply_activation(attention, self.heads_activation)
-            attention = apply_aggregation(attention, self.heads_aggregation)
+            attention = apply_aggregation(attention, self.heads_aggregation, dim=-4) 
 
             # Shape: (n_tokens, latent_size / factor, latent_size / factor)
             heatmaps.append(attention)

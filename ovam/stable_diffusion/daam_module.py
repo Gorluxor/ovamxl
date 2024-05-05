@@ -12,6 +12,18 @@ if TYPE_CHECKING:
     from .daam_block import CrossAttentionDAAMBlock
 
 
+def pack_interpolate_unpack(att, size, interpolation_mode):
+    if att.shape[-2:] == size:
+        # If the attention has the same size as the latent size, do nothing
+        return att
+    att, ps = einops.pack(att, "* c h w")
+    att = F.interpolate(
+        att,
+        size=size,
+        mode=interpolation_mode,
+    )
+    return torch.stack(einops.unpack(att, ps, "* c h w"))
+
 class StableDiffusionDAAM(DAAMModule):
     """Generic DAAMModule implementation for Stable Diffusion models. It is used to
     save the hidden states of the cross attention blocks and to build a callable
@@ -103,20 +115,16 @@ class StableDiffusionDAAM(DAAMModule):
         # Note(Alex): Added einops for interpolation across unaggragated attn
         attentions = []
         for att in attention:
-            if att.shape[-2:] == block_latent_size:
-                # If the attention has the same size as the latent size, do nothing
-                attentions.append(att)
-                continue
-            att, ps = einops.pack(att, "* c h w")
-            att = F.interpolate(
-                att,
-                size=block_latent_size,
-                mode=self.block_interpolation_mode,
-            )
-            attentions.append(torch.stack(einops.unpack(att, ps, "* c h w")))
+            attentions.append(pack_interpolate_unpack(att, block_latent_size, self.block_interpolation_mode))
         # Remove reference to attention without interpolation
         del attention
-
+        # check if all shapes match
+        _cond = all([att.shape == attentions[0].shape for att in attentions])
+        if not _cond:
+            attentions = [apply_activation(att, self.heatmaps_activation) for att in attentions]
+            attentions = [pack_interpolate_unpack(att, self.expand_size, self.expand_interpolation_mode)
+                           for att in attentions]
+            return attentions
         attentions = torch.stack(attentions, dim=0)
         attentions = apply_aggregation(
             attentions, self.heatmaps_aggregation
@@ -126,13 +134,9 @@ class StableDiffusionDAAM(DAAMModule):
         attentions = apply_activation(attentions, self.heatmaps_activation)
 
         if self.expand_size is not None:
-            attentions, ps = einops.pack(attentions, "* c h w")
-            attentions = F.interpolate(
-                attentions,
-                size=self.expand_size,
-                mode=self.expand_interpolation_mode,
-            )
-            attentions = torch.stack(einops.unpack(attentions, ps, "* c h w"))
+            attentions = pack_interpolate_unpack(attentions,
+                                                 self.expand_size,
+                                                 self.expand_interpolation_mode)
 
         return attentions
 
