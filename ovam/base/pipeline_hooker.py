@@ -48,10 +48,14 @@ class PipelineHooker(AggregateHooker):
         block_hooker_kwargs: dict = {},
     ):
         super().__init__()
+        subset = block_hooker_kwargs.pop("subset", None)
         self.pipeline = pipeline
         self.daam_module_class = daam_module_class
 
-        for name, cross_attention in locator.locate(pipeline).items():
+        for i, (name, cross_attention) in enumerate(locator.locate(pipeline).items()):
+            if subset is not None:
+                if i not in subset:
+                    continue
             cross_attention_hook = block_hooker_class(
                 cross_attention, name=name, **block_hooker_kwargs
             )
