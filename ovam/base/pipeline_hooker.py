@@ -59,6 +59,7 @@ class PipelineHooker(AggregateHooker):
             cross_attention_hook = block_hooker_class(
                 cross_attention, name=name, **block_hooker_kwargs
             )
+            print(f'[{i}] Registering hook for {name}')
             self.register_hook(cross_attention_hook)
 
         self._register_extra_hooks()

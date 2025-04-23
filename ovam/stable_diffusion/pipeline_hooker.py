@@ -4,7 +4,7 @@ from ..base.store_hooker import StoreHiddenStatesHooker
 from ..base.pipeline_hooker import PipelineHooker
 from .block_hooker import CrossAttentionHooker
 from .daam_module import StableDiffusionDAAM, DAAMModule, StableDiffusionXLDAAM
-from .locator import UNetCrossAttentionLocator
+from .locator import UNetCrossAttentionLocator, SlimeAttentionLocator
 from ..base.hooker import ObjectHooker, ModuleType
 
 if TYPE_CHECKING:
